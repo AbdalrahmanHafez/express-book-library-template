@@ -1,7 +1,15 @@
-
+const { query, body, validationResult, param } = require('express-validator');
 var express = require('express');
 const db = require('../db');
 var router = express.Router();
+
+const validate = (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) 
+      return res.status(400).json({ errors: errors.array() });
+  
+  next();
+};
 
 router.get('/list', async (req, res)=>{
   try {
@@ -14,7 +22,10 @@ router.get('/list', async (req, res)=>{
 });
 
 /* Delete a specific book */
-router.delete('/:id', async (req, res) => {
+validateBookId = [
+  param('id').isInt().withMessage('ID must be an integer')
+]
+router.delete('/:id', validateBookId, validate,  async (req, res) => {
   const bookId = req.params.id;
   console.log(`Deleting book with id ${bookId}`);
   try {
@@ -30,19 +41,18 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+const validateBookBody = [
+  body('title').notEmpty().withMessage('Title is required'),
+  body('author').notEmpty().withMessage('Author is required'),
+  body('isbn').isISBN().withMessage('ISBN is required'),
+  body('quantity').isInt({ min: 0 }).withMessage('Quantity must be a non-negative integer'),
+  body('shelf_location').notEmpty().withMessage('Shelf location is required')
+];
 /* Add a new book */
-router.post('/', async (req, res) => {
+router.post('/', validateBookBody, validate, async (req, res) => {
   const { title, author, isbn, quantity, shelf_location } = req.body;
-  
-  // Validate input
-  if (!title || !author || !isbn || quantity === undefined || !shelf_location) {
-    return res.status(400).send('All fields (title, author, isbn, quantity, shelf_location) are required.');
-  }
 
   try {
-    if (quantity < 0) {
-      throw new Error('Quantity cannot be negative');
-    }
 
     const result = await db.query(
       'INSERT INTO Book (title, author, isbn, quantity, shelf_location) VALUES ($1, $2, $3, $4, $5) RETURNING *',
@@ -51,20 +61,31 @@ router.post('/', async (req, res) => {
     res.status(201).json({ message: 'Book added successfully', book: result.rows[0] });
   } catch (err) {
     console.error(err);
-    res.status(500).send('Internal Server Error');
+    res.status(500).send(err.message);
   }
 });
 
 
 /* Update an existing book */
-router.put('/:id', async (req, res) => {
+const validateUpdateParams = [
+  param('id').isInt().withMessage('Book ID must be a valid integer'), 
+  body('title').optional().isString().withMessage('Title must be a string'),
+  body('author').optional().isString().withMessage('Author must be a string'),
+  body('isbn').isISBN().optional().withMessage('ISBN must be a valid ISBN'),
+  body('quantity').optional().isInt({ min: 0 }).withMessage('Quantity must be a non-negative integer'),
+  body('shelf_location').optional().isString().withMessage('Shelf location must be a string'),
+  
+  (req, res, next) => {
+    const { title, author, isbn, quantity, shelf_location } = req.body;
+    if (!title && !author && !isbn && quantity === undefined && !shelf_location) {
+      return res.status(400).send('At least one field (title, author, isbn, quantity, shelf_location) must be provided for update.');
+    }
+    next();
+  }
+];
+router.put('/:id',validateUpdateParams, async (req, res) => {
   const bookId = req.params.id;
   const { title, author, isbn, quantity, shelf_location } = req.body;
-
-  // Check if at least one field is provided for updating
-  if (!title && !author && !isbn && quantity === undefined && !shelf_location) {
-    return res.status(400).send('At least one field (title, author, isbn, quantity, shelf_location) must be provided for update.');
-  }
 
   try {
     // Construct the dynamic update query
@@ -114,14 +135,23 @@ router.put('/:id', async (req, res) => {
   }
 });
 
+
 /* Search for books by title, author, or ISBN */
-router.get('/search', async (req, res) => {
+const validateSearchParams = [
+  query('title').optional().isString().withMessage('Title must be a string'),
+  query('author').optional().isString().withMessage('Author must be a string'),
+  query('isbn').optional().isString().withMessage('ISBN must be a string'),
+  // Custom validator to ensure at least one of the parameters is provided
+  (req, res, next) => {
+    if (!req.query.title && !req.query.author && !req.query.isbn) {
+      return res.status(400).send('At least one query parameter (title, author, or ISBN) must be provided for searching.');
+    }
+    next();
+  }
+];
+router.get('/search',validateSearchParams, async (req, res) => {
   const { title, author, isbn } = req.query;
 
-  // Check if at least one search parameter is provided
-  if (!title && !author && !isbn) {
-    return res.status(400).send('At least one query parameter (title, author, or ISBN) must be provided for searching.');
-  }
 
   try {
     const conditions = [];
