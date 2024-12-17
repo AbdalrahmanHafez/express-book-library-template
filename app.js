@@ -1,3 +1,4 @@
+var  rateLimit = require('express-rate-limit')
 var createError = require('http-errors');
 var express = require('express');
 var path = require('path');
@@ -8,6 +9,15 @@ var indexRouter = require('./routes/index');
 var bookRouter = require('./routes/book.js');
 var customerRouter = require('./routes/customer.js');
 var borrowRouter = require('./routes/borrow.js');
+
+const rateLimiter = rateLimit({
+	windowMs: 5 * 60 * 1000, // 5 minutes
+	limit: 100, // Limit each IP to 100 requests per `window` (here, per 15 minutes).
+	standardHeaders: 'draft-8', // draft-6: `RateLimit-*` headers; draft-7 & draft-8: combined `RateLimit` header
+	legacyHeaders: false, // Disable the `X-RateLimit-*` headers.
+	// store: ... , // Redis, Memcached, etc. See below.
+})
+
 
 var app = express();
 
@@ -21,6 +31,7 @@ app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
+app.use(rateLimiter)
 app.use('/', indexRouter);
 app.use('/book', bookRouter);
 app.use('/customer', customerRouter);
