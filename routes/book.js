@@ -40,6 +40,10 @@ router.post('/', async (req, res) => {
   }
 
   try {
+    if (quantity < 0) {
+      throw new Error('Quantity cannot be negative');
+    }
+
     const result = await db.query(
       'INSERT INTO Book (title, author, isbn, quantity, shelf_location) VALUES ($1, $2, $3, $4, $5) RETURNING *',
       [title, author, isbn, quantity, shelf_location]
@@ -81,6 +85,10 @@ router.put('/:id', async (req, res) => {
       values.push(isbn);
     }
     if (quantity !== undefined) {
+      if (quantity < 0) {
+        throw new Error('Quantity cannot be negative');
+      }
+      
       fields.push(`quantity = $${index++}`);
       values.push(quantity);
     }

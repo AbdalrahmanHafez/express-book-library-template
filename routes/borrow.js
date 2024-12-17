@@ -12,16 +12,14 @@ async function getUser(user_id) {
   return result;
 }
 
-async function getBook(book_id ) {
-	if (!book_id) return false;
-  
-	const result = await db.query("SELECT * FROM Book WHERE id = $1", [
-	  book_id,
-	]);
-	if (result.rowCount === 0) return false;
-  
-	return result;
-  }
+async function getBook(book_id) {
+  if (!book_id) return false;
+
+  const result = await db.query("SELECT * FROM Book WHERE id = $1", [book_id]);
+  if (result.rowCount === 0) return false;
+
+  return result;
+}
 
 /* Endpoint 1: Borrow a Book */
 router.post("/", async (req, res) => {
@@ -47,13 +45,18 @@ router.post("/", async (req, res) => {
     }
 
     // check that the user exists
-    const userResult = await db.query("SELECT * FROM Customer WHERE id = $1", [
-      user_id,
-    ]);
-    if (userResult.rowCount === 0) {
-      return res.status(404).send("User not found.");
-    }
+    // const userResult = await db.query("SELECT * FROM Customer WHERE id = $1", [
+    //   user_id,
+    // ]);
+    // if (userResult.rowCount === 0) {
+    //   return res.status(404).send("User not found.");
+    // }
 
+    // check dueReturnDate is in the future
+    if (new Date(dueReturnAt) <= new Date()) {
+      return res.status(400).send("Due return date must be in the future.");
+    }
+ 
     try {
       await db.query("BEGIN");
 
@@ -128,7 +131,7 @@ router.put("/return/:user_id/:book_id", async (req, res) => {
 /* Endpoint 3: List Books Borrowed by a Customer */
 router.get("/borrowed/:user_id", async (req, res) => {
   const userId = req.params.user_id;
-	console.log("brrowed by user id", userId);
+  console.log("brrowed by user id", userId);
   try {
     const result = await db.query(
       `SELECT bk.title, bk.author, br.createdAt, br.dueReturnAt 
